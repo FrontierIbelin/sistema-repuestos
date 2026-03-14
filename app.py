@@ -2,68 +2,111 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-# 1. Configuración de pantalla ancha
-st.set_page_config(page_title="Sistema de Repuestos", layout="wide")
+# 1. Configuración de pantalla ancha y estilo
+st.set_page_config(page_title="Sistema de Inventario Pro", layout="wide")
 
 st.markdown("""
     <style>
-    .main { background-color: #ffffff; }
-    h1 { color: #d32f2f; font-size: 28px; font-weight: bold; }
-    .stSelectbox label { color: #d32f2f; font-weight: bold; }
+    h1 { color: #d32f2f; font-family: 'Arial Black'; margin-bottom: 20px; }
+    .stSelectbox label { color: #333333; font-weight: bold; }
+    .stDataFrame { border: 1px solid #d32f2f; }
     </style>
     """, unsafe_allow_html=True)
 
+# Intento de cargar logo si existe
 try:
     st.image("logo.png", width=120)
 except:
     pass
 
-st.title("➕ Buscador de Repuestos")
+st.title("🔴 Buscador de Inventario de Repuestos")
 
-# 2. Conexión
-conn = st.connection("gsheets", type=GSheetsConnection)
-df = conn.read().dropna(how='all')
-
-# 3. FILTROS EN LA PARTE SUPERIOR
-col1, col2, col3, col4 = st.columns(4)
-
-with col1:
-    marcas = ["Seleccione..."] + sorted(df["Marca Prod"].dropna().unique().tolist()) if "Marca Prod" in df.columns else ["Seleccione..."]
-    marca_sel = st.selectbox("Marca Prod", marcas)
-
-with col2:
-    cats = ["Seleccione..."] + sorted(df["Categoría"].dropna().unique().tolist()) if "Categoría" in df.columns else ["Seleccione..."]
-    cat_sel = st.selectbox("Categoría", cats)
-
-with col3:
-    tiendas = ["Seleccione..."] + sorted(df["Tienda"].dropna().unique().tolist()) if "Tienda" in df.columns else ["Seleccione..."]
-    tienda_sel = st.selectbox("Tienda", tiendas)
-
-with col4:
-    busqueda = st.text_input("🔍 Buscar Código o Descrip.")
-
-# 4. LÓGICA DE FILTRADO
-# Solo filtramos si hay alguna selección o texto
-activado = (marca_sel != "Seleccione...") or (cat_sel != "Seleccione...") or (tienda_sel != "Seleccione...") or (busqueda != "")
-
-if activado:
-    df_final = df.copy()
-    if marca_sel != "Seleccione...":
-        df_final = df_final[df_final["Marca Prod"] == marca_sel]
-    if cat_sel != "Seleccione...":
-        df_final = df_final[df_final["Categoría"] == cat_sel]
-    if tienda_sel != "Seleccione...":
-        df_final = df_final[df_final["Tienda"] == tienda_sel]
-    if busqueda:
-        mask = df_final.apply(lambda row: row.astype(str).str.contains(busqueda, case=False).any(), axis=1)
-        df_final = df_final[mask]
-
-    st.write(f"### 📋 Resultados encontrados: {len(df_final)}")
-    st.dataframe(df_final, use_container_width=True, hide_index=True)
+# 2. Conexión a Google Sheets
+try:
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    df = conn.read().dropna(how='all')
     
-    if df_final.empty:
-        st.warning("No se encontraron coincidencias para su búsqueda.")
-else:
-    # Mensaje inicial cuando no han buscado nada
-    st.info("Para comenzar, seleccione un filtro arriba o escriba en el buscador.")
+    # Limpieza de nombres de columnas (quita espacios accidentales)
+    df.columns = df.columns.str.strip()
+
+    # 3. BARRA DE FILTROS HORIZONTALES (5 Columnas)
+    f1, f2, f3, f4, f5 = st.columns(5)
+
+    with f1:
+        marcas = ["Seleccione..."] + sorted(df["Marca Vehículo"].dropna().unique().tolist()) if "Marca Vehículo" in df.columns else ["Seleccione..."]
+        marca_sel = st.selectbox("Marca", marcas)
+
+    with f2:
+        # Filtro dinámico para el modelo
+        df_mod = df[df["Marca Vehículo"] == marca_sel] if marca_sel != "Seleccione..." else df
+        modelos = ["Seleccione..."] + sorted(df_mod["Modelo"].astype(str).dropna().unique().tolist()) if "Modelo" in df.columns else ["Seleccione..."]
+        mod_sel = st.selectbox("Modelo", modelos)
+
+    with f3:
+        años = ["Seleccione..."] + sorted(df["Año"].astype(str).dropna().unique().tolist()) if "Año" in df.columns else ["Seleccione..."]
+        año_sel = st.selectbox("Año", años)
+
+    with f4:
+        cilindros = ["Seleccione..."] + sorted(df["Cilindraje"].astype(str).dropna().unique().tolist()) if "Cilindraje" in df.columns else ["Seleccione..."]
+        cil_sel = st.selectbox("Cilindraje", cilindros)
+
+    with f5:
+        tipos = ["Seleccione..."] + sorted(df["Tipo de Repuesto"].dropna().unique().tolist()) if "Tipo de Repuesto" in df.columns else ["Seleccione..."]
+        tipo_sel = st.selectbox("Tipo de Repuesto", tipos)
+
+    # Buscador de texto (Códigos y Descripción)
+    busqueda = st.text_input("🔍 Buscar por Código (OEM o Alterno) o descripción específica:")
+
+    # 4. LÓGICA DE FILTRADO ACTIVO
+    # Solo mostramos la tabla si el usuario interactúa con algún filtro
+    activado = (marca_sel != "Seleccione...") or (mod_sel != "Seleccione...") or (año_sel != "Seleccione...") or (cil_sel != "Seleccione...") or (tipo_sel != "Seleccione...") or (busqueda != "")
+
+    if activado:
+        df_final = df.copy()
+        
+        if marca_sel != "Seleccione...":
+            df_final = df_final[df_final["Marca Vehículo"] == marca_sel]
+        if mod_sel != "Seleccione...":
+            df_final = df_final[df_final["Modelo"].astype(str) == mod_sel]
+        if año_sel != "Seleccione...":
+            df_final = df_final[df_final["Año"].astype(str) == año_sel]
+        if cil_sel != "Seleccione...":
+            df_final = df_final[df_final["Cilindraje"].astype(str) == cil_sel]
+        if tipo_sel != "Seleccione...":
+            df_final = df_final[df_final["Tipo de Repuesto"] == tipo_sel]
+        
+        if busqueda:
+            mask = df_final.apply(lambda row: row.astype(str).str.contains(busqueda, case=False).any(), axis=1)
+            df_final = df_final[mask]
+
+        # 5. MOSTRAR RESULTADOS
+        # Definimos el orden de las columnas final
+        cols_orden = [
+            "Marca Vehículo", "Modelo", "Año", "Cilindraje", 
+            "Tipo de Repuesto", "Descripción", "LISTA OEM", 
+            "Códigos Alternos", "Cantidad", "Ubicación", "Precio"
+        ]
+        
+        # Filtramos solo las columnas que realmente existan en el Sheets
+        columnas_finales = [c for c in cols_orden if c in df_final.columns]
+        
+        st.write(f"### 📋 Repuestos encontrados: {len(df_final)}")
+        
+        # Mostramos la tabla con el ancho de la pantalla
+        st.dataframe(df_final[columnas_finales], use_container_width=True, hide_index=True)
+        
+        # Alerta visual de Stock Agotado
+        if "Cantidad" in df_final.columns:
+            agotados = df_final[df_final["Cantidad"].astype(float) <= 0]
+            if not agotados.empty:
+                st.error(f"⚠️ Nota: Tienes {len(agotados)} producto(s) con stock en 0.")
+
+    else:
+        # Mensaje de bienvenida cuando no hay filtros activos
+        st.info("👋 Bienvenido. Por favor, selecciona los datos del vehículo o escribe un código para buscar.")
+
+except Exception as e:
+    st.error("No se pudo conectar con el inventario.")
+    st.info("Revisa que los nombres de las columnas en tu Google Sheets sean idénticos a los del código.")
+    # st.write(e) # Descomentar para ver el error técnico si persiste
     
