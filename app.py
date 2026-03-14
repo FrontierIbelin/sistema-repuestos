@@ -1,32 +1,48 @@
 import streamlit as st
-import pandas as pd
+from streamlit_gsheets import GSheetsConnection
 
-# 1. Configuración visual
+# 1. Configuración de página y estilo
 st.set_page_config(page_title="Sistema de Repuestos", layout="wide")
 
-# 2. Aplicar color rojo y estilos (CORREGIDO)
 st.markdown("""
     <style>
-    .main { background-color: #ffffff; }
     h1 { color: #ff0000; }
-    .stButton>button { background-color: #ff0000; color: white; }
+    .stTextInput>div>div>input { border-color: #ff0000; }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. Cargar el logo
+# 2. Mostrar Logo
 try:
-    st.image("logo.png", width=250)
+    st.image("logo.png", width=200)
 except:
-    st.error("No se encontró el archivo logo.png")
+    pass
 
 st.title("🔴 Buscador de Repuestos")
 
-# 4. Buscador
-query = st.text_input("Busca por nombre, marca o modelo de auto:")
+# 3. Conexión a Google Sheets
+conn = st.connection("gsheets", type=GSheetsConnection)
 
-if query:
-    st.write(f"Buscando: {query}...")
-    st.info("Conexión con Google Sheets pendiente.")
-else:
-    st.write("Ingresa un repuesto para comenzar.")
+try:
+    # Lee los datos (asegúrate que tu Excel tenga datos)
+    df = conn.read()
+    
+    # 4. Buscador
+    busqueda = st.text_input("Escribe el repuesto, marca o modelo que buscas:")
+
+    if busqueda:
+        # Filtra en todas las columnas
+        mask = df.apply(lambda row: row.astype(str).str.contains(busqueda, case=False).any(), axis=1)
+        resultados = df[mask]
+        
+        if not resultados.empty:
+            st.success(f"Se encontraron {len(resultados)} resultados:")
+            st.dataframe(resultados, use_container_width=True)
+        else:
+            st.warning("No se encontraron coincidencias.")
+    else:
+        st.write("Ingresa un término para ver los repuestos disponibles.")
+        st.dataframe(df.head(10), use_container_width=True) # Muestra los primeros 10 por defecto
+
+except Exception as e:
+    st.error("Error al conectar con Google Sheets. Revisa que los 'Secrets' estén bien configurados.")
     
